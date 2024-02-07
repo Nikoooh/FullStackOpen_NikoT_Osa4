@@ -1,4 +1,12 @@
+const app = require('../app')
 const listHelper = require('../utils/list_helper')
+const supertest = require('supertest')
+const mongoose = require('mongoose')
+const Blog = require('../models/blog')
+
+const api = supertest(app)
+
+// Osa4 A tehtävät
 
 test('dummy returns one', () => {
   const result = listHelper.dummy(blogs)
@@ -109,4 +117,149 @@ const blogs = [
       likes: 2,
       __v: 0
     }  
+]
+
+// Osa 4 B
+
+
+
+beforeEach(async () => {
+  await Blog.deleteMany({})
+
+  await Promise.all(initBlogs.map(async (blog) => {
+    let newBlogObj = new Blog(blog)
+    await newBlogObj.save()
+  }));
+
+})
+
+test('two blogs are returned as json', async () => {
+  await api
+    .get('/api/blogs')
+    .expect('Content-Type', /application\/json/)
+
+  const response = await api.get('/api/blogs')
+  expect(response.body).toHaveLength(2)
+
+})
+
+test('blogs are identified with an id field', async () => {
+  const response = await api.get('/api/blogs')
+
+  response.body.forEach(blog => {
+    expect(blog.id).toBeDefined()
+  })
+  
+})
+
+test('adding one blog to the test database', async () => {
+
+  const firstResponse = await api.get('/api/blogs')
+
+  await api.post('/api/blogs')
+    .send({
+      title: "This is test database",
+      author: "Testailija",
+      url: "https://test.kom",
+      likes: 12
+    })
+    .expect(201)
+    .expect('Content-Type', /application\/json/)
+
+  const secondsResponse = await api.get('/api/blogs')
+  let sum = secondsResponse.body.length - firstResponse.body.length
+  expect(sum).toEqual(1)
+
+})
+
+test('if no like is given, likes are zero', async () => {
+  const response = await api.post('/api/blogs')
+    .send({
+      title: "No like given",
+      author: "Likeless",
+      url: "https://test.kom"
+    })
+    .expect(201)
+
+    expect(response.body.likes).toBe(0)
+})
+
+test('if no title or url, response code is 400', async () => {
+  await api.post('/api/blogs')
+    .send({
+      title: "No url",
+      author: "Urless",
+      likes: 4
+    })
+    .expect(400)
+
+  await api.post('/api/blogs')
+    .send({
+      author: "Titleless",
+      url: "https://notitlehere.com",
+      likes: 4
+    })
+    .expect(400)  
+})
+
+test('deleting document with correct id results in status 204, with wrong 404', async () => {
+  await api.post('/api/blogs')
+    .send({
+      title: "Delete",
+      author: "Dlt",
+      url: "https://test.kom",
+      likes: 5
+    })
+
+  const deleteResponse = await api.get('/api/blogs')  
+
+  await api.delete(`/api/blogs/${deleteResponse.body[deleteResponse.body.length - 1].id}`)
+    .expect(204)
+
+  await api.delete(`/api/blogs/123`)
+    .expect(404)  
+  
+})
+
+test('updating blogs', async () => {
+
+  const getBlogs = await api.get('/api/blogs')
+  const id = getBlogs.body[0].id
+  await api.put(`/api/blogs/${id}`)
+    .send({
+      title: "Updated blog",
+      likes: 53
+    })
+    .expect(201)
+    
+  const resp = await api.get('/api/blogs')
+
+  expect(resp.body[0]).toEqual({
+    id: id,
+    title: "Updated blog",
+    author: "santa52",
+    url: "https://test.com",
+    likes: 53
+  }) 
+
+})
+
+afterAll(async () => {
+  await Blog.deleteMany({})
+  await mongoose.connection.close
+})
+
+const initBlogs = [
+  {
+    title: "Testing blog 1",
+    author: "santa52",
+    url: "https://test.com",
+    likes: 186
+  },
+  {    
+    title: "Testing blog 2",
+    author: "gremlin1",
+    url: "https://testingurl.com",
+    likes: 64
+  }
 ]
