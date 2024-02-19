@@ -3,6 +3,7 @@ const listHelper = require('../utils/list_helper')
 const supertest = require('supertest')
 const mongoose = require('mongoose')
 const Blog = require('../models/blog')
+const User = require('../models/user')
 
 const api = supertest(app)
 
@@ -121,7 +122,19 @@ const blogs = [
 
 // Osa 4 B
 
+let token
 
+beforeAll(async () => {
+  await api.post('/api/users')
+      .send({
+        username: "TestiUser2",
+        name: "NikoToivanen",
+        password: "salasana123"
+      })
+
+  const getToken = await api.post('/login').send({username: "TestiUser2", password: "salasana123"})
+  token = getToken.body
+})
 
 beforeEach(async () => {
   await Blog.deleteMany({})
@@ -156,13 +169,15 @@ test('adding one blog to the test database', async () => {
 
   const firstResponse = await api.get('/api/blogs')
 
+  console.log(token.token)
+
   await api.post('/api/blogs')
     .send({
       title: "This is test database",
       author: "Testailija",
       url: "https://test.kom",
       likes: 12
-    })
+    })   
     .expect(201)
     .expect('Content-Type', /application\/json/)
 
@@ -263,3 +278,53 @@ const initBlogs = [
     likes: 64
   }
 ]
+
+// Osa 4 D
+
+beforeEach(async () => {
+  await User.deleteMany({})
+})
+
+describe('creating a', () => {
+  test('unique new user results in success', async () => {
+    const request = await api.post('/api/users')
+      .send({
+        username: "TestiUser1",
+        name: "NikoToivanen",
+        password: "salasana123"
+      })
+      .expect(201)
+  })
+
+  test('not unique new user results in error', async () => {
+    await api.post('/api/users')
+      .send({
+        username: "TestiUser2",
+        name: "NikoToivanen",
+        password: "salasana123"
+      })
+      .expect(201)
+
+      await api.post('/api/users')
+      .send({
+        username: "TestiUser2",
+        name: "NikoToivanen",
+        password: "salasana123"
+      })
+      .expect(400)
+  })
+
+  test('user with no password results in error', async () => {
+    await api.post('/api/users')
+      .send({
+        username: "TestiUser2",
+        name: "NikoToivanen"
+      })
+      .expect(400)
+  })
+
+})
+
+afterAll(async () => {
+  await mongoose.connection.close()
+})
